@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using LibGit2Sharp;
 using Nerdbank.GitVersioning;
+using NerdBank.GitVersioning.Git;
 using Validation;
 using Xunit.Abstractions;
 
@@ -25,6 +22,8 @@ public abstract class RepoTestBase : IDisposable
     protected ITestOutputHelper Logger { get; }
 
     protected Repository Repo { get; set; }
+
+    protected IGitRepository GitRepository { get; set; }
 
     protected string RepoPath { get; set; }
 
@@ -86,6 +85,13 @@ public abstract class RepoTestBase : IDisposable
         {
             this.Repo.Commit("initial commit", this.Signer, this.Signer);
         }
+
+        this.GitRepository = new LibGit2Repository(this.Repo);
+    }
+
+    protected ICommit GetHead()
+    {
+        return LibGit2Commit.Create(this.Repo.Head.Tip, this.GitRepository);
     }
 
     protected void Ignore_git2_UntrackedFile()

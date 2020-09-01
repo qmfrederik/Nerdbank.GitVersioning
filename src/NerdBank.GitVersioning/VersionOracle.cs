@@ -8,6 +8,7 @@
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Text.RegularExpressions;
+    using NerdBank.GitVersioning.Git;
     using Validation;
 
     /// <summary>
@@ -42,10 +43,15 @@
             }
         }
 
+        public VersionOracle(string projectDirectory, LibGit2Sharp.Repository repo, LibGit2Sharp.Commit commit, ICloudBuild cloudBuild, int? overrideBuildNumberOffset = null, string projectPathRelativeToGitRepoRoot = null)
+            : this(projectDirectory, LibGit2Repository.Create(repo), commit == null ? null : new LibGit2Commit(commit, new LibGit2Repository(repo)), cloudBuild, overrideBuildNumberOffset, projectPathRelativeToGitRepoRoot)
+        {
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="VersionOracle"/> class.
         /// </summary>
-        public VersionOracle(string projectDirectory, LibGit2Sharp.Repository repo, ICloudBuild cloudBuild, int? overrideBuildNumberOffset = null, string projectPathRelativeToGitRepoRoot = null)
+        public VersionOracle(string projectDirectory, IGitRepository repo, ICloudBuild cloudBuild, int? overrideBuildNumberOffset = null, string projectPathRelativeToGitRepoRoot = null)
             : this(projectDirectory, repo, null, cloudBuild, overrideBuildNumberOffset, projectPathRelativeToGitRepoRoot)
         {
         }
@@ -53,11 +59,11 @@
         /// <summary>
         /// Initializes a new instance of the <see cref="VersionOracle"/> class.
         /// </summary>
-        public VersionOracle(string projectDirectory, LibGit2Sharp.Repository repo, LibGit2Sharp.Commit head, ICloudBuild cloudBuild, int? overrideVersionHeightOffset = null, string projectPathRelativeToGitRepoRoot = null)
+        public VersionOracle(string projectDirectory, IGitRepository repo, ICommit head, ICloudBuild cloudBuild, int? overrideVersionHeightOffset = null, string projectPathRelativeToGitRepoRoot = null)
         {
             var relativeRepoProjectDirectory = projectPathRelativeToGitRepoRoot ?? repo?.GetRepoRelativePath(projectDirectory);
 
-            var commit = head ?? repo?.Head.Tip;
+            var commit = head ?? repo?.Head;
 
             var committedVersion = VersionFile.GetVersion(commit, relativeRepoProjectDirectory);
 
@@ -78,10 +84,10 @@
 
             this.VersionOptions = committedVersion ?? workingVersion;
 
-            this.GitCommitId = commit?.Id.Sha ?? cloudBuild?.GitCommitId ?? null;
-            this.GitCommitDate = commit?.Author.When;
+            this.GitCommitId = commit?.Sha ?? cloudBuild?.GitCommitId ?? null;
+            this.GitCommitDate = commit?.When;
             this.VersionHeight = CalculateVersionHeight(relativeRepoProjectDirectory, commit, committedVersion, workingVersion);
-            this.BuildingRef = cloudBuild?.BuildingTag ?? cloudBuild?.BuildingBranch ?? repo?.Head.CanonicalName;
+            this.BuildingRef = cloudBuild?.BuildingTag ?? cloudBuild?.BuildingBranch ?? repo?.HeadCanonicalName;
 
             // Override the typedVersion with the special build number and revision components, when available.
             if (repo != null)
@@ -101,7 +107,7 @@
                 // get it from the git repository if there is a repository present and it is enabled
                 if (repo != null && gitCommitIdShortAutoMinimum > 0)
                 {
-                    this.GitCommitIdShort = repo.ObjectDatabase.ShortenObjectId(commit, gitCommitIdShortAutoMinimum);
+                    this.GitCommitIdShort = repo.ShortenObjectId(commit, gitCommitIdShortAutoMinimum);
                 }
                 else
                 {
@@ -471,7 +477,7 @@
         /// <returns>The specified string, with macros substituted for actual values.</returns>
         private string ReplaceMacros(string prereleaseOrBuildMetadata) => prereleaseOrBuildMetadata?.Replace(VersionOptions.VersionHeightPlaceholder, this.VersionHeightWithOffset.ToString(CultureInfo.InvariantCulture));
 
-        private static int CalculateVersionHeight(string relativeRepoProjectDirectory, LibGit2Sharp.Commit headCommit, VersionOptions committedVersion, VersionOptions workingVersion)
+        private static int CalculateVersionHeight(string relativeRepoProjectDirectory, ICommit headCommit, VersionOptions committedVersion, VersionOptions workingVersion)
         {
             var headCommitVersion = committedVersion?.Version ?? SemVer0;
 
@@ -490,7 +496,7 @@
             return headCommit?.GetVersionHeight(relativeRepoProjectDirectory) ?? 0;
         }
 
-        private static Version GetIdAsVersion(LibGit2Sharp.Commit headCommit, VersionOptions committedVersion, VersionOptions workingVersion, int versionHeight)
+        private static Version GetIdAsVersion(ICommit headCommit, VersionOptions committedVersion, VersionOptions workingVersion, int versionHeight)
         {
             var version = IsVersionFileChangedInWorkingTree(committedVersion, workingVersion) ? workingVersion : committedVersion;
 

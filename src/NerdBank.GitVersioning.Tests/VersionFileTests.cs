@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using LibGit2Sharp;
 using Nerdbank.GitVersioning;
+using NerdBank.GitVersioning.Git;
 using Newtonsoft.Json;
 using Xunit;
 using Xunit.Abstractions;
@@ -26,7 +24,7 @@ public class VersionFileTests : RepoTestBase
     [Fact]
     public void IsVersionDefined_Commit_Null()
     {
-        Assert.False(VersionFile.IsVersionDefined((Commit)null));
+        Assert.False(VersionFile.IsVersionDefined((ICommit)null));
     }
 
     [Fact]
@@ -41,14 +39,14 @@ public class VersionFileTests : RepoTestBase
     {
         this.InitializeSourceControl();
         this.AddCommits();
-        Assert.False(VersionFile.IsVersionDefined(this.Repo.Head.Commits.First()));
+        Assert.False(VersionFile.IsVersionDefined(new LibGit2Commit(this.Repo.Head.Commits.First(), new LibGit2Repository(this.Repo))));
 
         this.WriteVersionFile();
 
         // Verify that we can find the version.txt file in the most recent commit,
         // But not in the initial commit.
-        Assert.True(VersionFile.IsVersionDefined(this.Repo.Head.Commits.First()));
-        Assert.False(VersionFile.IsVersionDefined(this.Repo.Head.Commits.Last()));
+        Assert.True(VersionFile.IsVersionDefined(new LibGit2Commit(this.Repo.Head.Commits.First(), new LibGit2Repository(this.Repo))));
+        Assert.False(VersionFile.IsVersionDefined(new LibGit2Commit(this.Repo.Head.Commits.Last(), new LibGit2Repository(this.Repo))));
     }
 
     [Fact]
@@ -317,11 +315,11 @@ public class VersionFileTests : RepoTestBase
     [Fact]
     public void GetVersion_Commit()
     {
-        Assert.Null(VersionFile.GetVersion((Commit)null));
+        Assert.Null(VersionFile.GetVersion((ICommit)null));
 
         this.InitializeSourceControl();
         this.WriteVersionFile();
-        VersionOptions fromCommit = VersionFile.GetVersion(this.Repo.Head.Commits.First());
+        VersionOptions fromCommit = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Head.Commits.First(), new LibGit2Repository(this.Repo)));
         VersionOptions fromFile = VersionFile.GetVersion(this.RepoPath);
         Assert.NotNull(fromCommit);
         Assert.Equal(fromFile, fromCommit);
@@ -346,7 +344,7 @@ public class VersionFileTests : RepoTestBase
         Directory.CreateDirectory(subDirABC);
         VersionFile.SetVersion(subDirAB, new Version(1, 1));
         this.InitializeSourceControl();
-        var commit = this.Repo.Head.Commits.First();
+        var commit = new LibGit2Commit(this.Repo.Head.Commits.First(), new LibGit2Repository(this.Repo));
 
         this.AssertPathHasVersion(commit, subDirABC, subdirVersionSpec);
         this.AssertPathHasVersion(commit, subDirAB, subdirVersionSpec);
@@ -377,7 +375,7 @@ public class VersionFileTests : RepoTestBase
         Directory.CreateDirectory(subDirABC);
         VersionFile.SetVersion(subDirAB, subdirVersionSpec);
         this.InitializeSourceControl();
-        var commit = this.Repo.Head.Commits.First();
+        var commit = new LibGit2Commit(this.Repo.Head.Commits.First(), new LibGit2Repository(this.Repo));
 
         this.AssertPathHasVersion(commit, subDirABC, subdirVersionSpec);
         this.AssertPathHasVersion(commit, subDirAB, subdirVersionSpec);
@@ -470,7 +468,7 @@ public class VersionFileTests : RepoTestBase
                 Inherit = true,
                 Version = SemanticVersion.Parse("14.2"),
             });
-        Assert.Throws<InvalidOperationException>(() => VersionFile.GetVersion(this.Repo));
+        Assert.Throws<InvalidOperationException>(() => VersionFile.GetVersion(new LibGit2Repository(this.Repo)));
     }
 
     [Fact]
@@ -537,9 +535,9 @@ public class VersionFileTests : RepoTestBase
                 Repository.Clone(this.RepoPath, this.CreateDirectoryForNewRepo(), new CloneOptions { IsBare = true }));
         }
 
-        using (operatingRepo)
+        using (var repo = LibGit2Repository.Create(operatingRepo))
         {
-            VersionOptions GetOption(string path) => commitInSourceControl ? VersionFile.GetVersion(operatingRepo, path) : VersionFile.GetVersion(Path.Combine(this.RepoPath, path));
+            VersionOptions GetOption(string path) => commitInSourceControl ? VersionFile.GetVersion(repo, path) : VersionFile.GetVersion(Path.Combine(this.RepoPath, path));
 
             var level1Options = GetOption(string.Empty);
             Assert.False(level1Options.Inherit);
@@ -573,18 +571,18 @@ public class VersionFileTests : RepoTestBase
 
                 // The version height should be the same for all those that inherit the version from the base,
                 // even though the inheriting files were introduced in successive commits.
-                Assert.Equal(totalCommits, operatingRepo.GetVersionHeight());
-                Assert.Equal(totalCommits, operatingRepo.GetVersionHeight("foo"));
-                Assert.Equal(totalCommits, operatingRepo.GetVersionHeight(@"foo\bar"));
+                Assert.Equal(totalCommits, repo.GetVersionHeight());
+                Assert.Equal(totalCommits, repo.GetVersionHeight("foo"));
+                Assert.Equal(totalCommits, repo.GetVersionHeight(@"foo\bar"));
 
                 // These either don't inherit, or inherit but reset versions, so the commits were reset.
-                Assert.Equal(2, operatingRepo.GetVersionHeight("noInherit"));
-                Assert.Equal(1, operatingRepo.GetVersionHeight("inheritWithVersion"));
+                Assert.Equal(2, repo.GetVersionHeight("noInherit"));
+                Assert.Equal(1, repo.GetVersionHeight("inheritWithVersion"));
             }
         }
     }
 
-    private void AssertPathHasVersion(Commit commit, string absolutePath, VersionOptions expected)
+    private void AssertPathHasVersion(ICommit commit, string absolutePath, VersionOptions expected)
     {
         var actual = VersionFile.GetVersion(absolutePath);
         Assert.Equal(expected, actual);

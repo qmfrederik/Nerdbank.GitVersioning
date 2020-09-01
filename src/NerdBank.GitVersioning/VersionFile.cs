@@ -1,13 +1,10 @@
 ﻿namespace Nerdbank.GitVersioning
 {
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Converters;
-    using Newtonsoft.Json.Linq;
-    using Newtonsoft.Json.Serialization;
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
+    using NerdBank.GitVersioning.Git;
+    using Newtonsoft.Json;
     using Validation;
 
     /// <summary>
@@ -36,7 +33,7 @@
         /// <param name="commit">The commit to read the version file from.</param>
         /// <param name="repoRelativeProjectDirectory">The directory to consider when searching for the version.txt file.</param>
         /// <returns>The version information read from the file.</returns>
-        public static VersionOptions GetVersion(LibGit2Sharp.Commit commit, string repoRelativeProjectDirectory = null)
+        public static VersionOptions GetVersion(ICommit commit, string repoRelativeProjectDirectory = null)
         {
             if (commit == null)
             {
@@ -49,10 +46,10 @@
                 string parentDirectory = searchDirectory.Length > 0 ? Path.GetDirectoryName(searchDirectory) : null;
 
                 string candidatePath = Path.Combine(searchDirectory, TxtFileName).Replace('\\', '/');
-                var versionTxtBlob = commit.Tree[candidatePath]?.Target as LibGit2Sharp.Blob;
+                var versionTxtBlob = commit.GetBlobStream(candidatePath);
                 if (versionTxtBlob != null)
                 {
-                    var result = TryReadVersionFile(new StreamReader(versionTxtBlob.GetContentStream()));
+                    var result = TryReadVersionFile(new StreamReader(versionTxtBlob));
                     if (result != null)
                     {
                         return result;
@@ -60,11 +57,11 @@
                 }
 
                 candidatePath = Path.Combine(searchDirectory, JsonFileName).Replace('\\', '/');
-                var versionJsonBlob = commit.Tree[candidatePath]?.Target as LibGit2Sharp.Blob;
+                var versionJsonBlob = commit.GetBlobStream(candidatePath);
                 if (versionJsonBlob != null)
                 {
                     string versionJsonContent;
-                    using (var sr = new StreamReader(versionJsonBlob.GetContentStream()))
+                    using (var sr = new StreamReader(versionJsonBlob))
                     {
                         versionJsonContent = sr.ReadToEnd();
                     }
@@ -114,21 +111,21 @@
         /// <param name="repo">The repo to read the version file from.</param>
         /// <param name="repoRelativeProjectDirectory">The directory to consider when searching for the version.txt file.</param>
         /// <returns>The version information read from the file.</returns>
-        public static VersionOptions GetVersion(LibGit2Sharp.Repository repo, string repoRelativeProjectDirectory = null)
+        public static VersionOptions GetVersion(IGitRepository repo, string repoRelativeProjectDirectory = null)
         {
             if (repo == null)
             {
                 return null;
             }
 
-            if (!repo.Info.IsBare)
+            if (!repo.IsBare)
             {
-                string fullDirectory = Path.Combine(repo.Info.WorkingDirectory, repoRelativeProjectDirectory ?? string.Empty);
+                string fullDirectory = Path.Combine(repo.WorkingDirectory, repoRelativeProjectDirectory ?? string.Empty);
                 var workingCopyVersion = GetVersion(fullDirectory);
                 return workingCopyVersion;
             }
 
-            return GetVersion(repo.Head.Tip, repoRelativeProjectDirectory);
+            return GetVersion(repo.Head, repoRelativeProjectDirectory);
         }
 
         /// <summary>
@@ -147,7 +144,7 @@
         public static VersionOptions GetVersion(string projectDirectory, out string actualDirectory)
         {
             Requires.NotNullOrEmpty(projectDirectory, nameof(projectDirectory));
-            using (var repo = GitExtensions.OpenGitRepo(projectDirectory))
+            using (var repo = GitExtensions.OpenGitRepo2(projectDirectory))
             {
                 string searchDirectory = projectDirectory;
                 while (searchDirectory != null)
@@ -214,7 +211,7 @@
         /// <param name="commit">The commit to search.</param>
         /// <param name="projectDirectory">The directory to consider when searching for the version.txt file.</param>
         /// <returns><c>true</c> if the version.txt file is found; otherwise <c>false</c>.</returns>
-        public static bool IsVersionDefined(LibGit2Sharp.Commit commit, string projectDirectory = null)
+        public static bool IsVersionDefined(ICommit commit, string projectDirectory = null)
         {
             return GetVersion(commit, projectDirectory) != null;
         }
@@ -281,7 +278,7 @@
                 }
             }
 
-            using (var repo = GitExtensions.OpenGitRepo(projectDirectory))
+            using (var repo = LibGit2Repository.Create(GitExtensions.OpenGitRepo(projectDirectory)))
             {
                 string repoRelativeProjectDirectory = repo?.GetRepoRelativePath(projectDirectory);
                 string versionJsonPath = Path.Combine(projectDirectory, JsonFileName);

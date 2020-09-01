@@ -18,6 +18,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Nerdbank.GitVersioning;
+using NerdBank.GitVersioning.Git;
 using Validation;
 using Xunit;
 using Xunit.Abstractions;
@@ -182,11 +183,12 @@ public class BuildIntegrationTests : RepoTestBase, IClassFixture<MSBuildFixture>
     {
         Repository.Init(this.RepoPath);
         var repo = new Repository(this.RepoPath); // do not assign Repo property to avoid commits being generated later
+        var repository = new LibGit2Repository(repo);
         repo.Commit("empty", this.Signer, this.Signer, new CommitOptions { AllowEmptyCommit = true });
         this.WriteVersionFile("3.4");
         Assumes.True(repo.Index[VersionFile.JsonFileName] == null);
         var buildResult = await this.BuildAsync();
-        Assert.Equal("3.4.0." + repo.Head.Tip.GetIdAsVersion().Revision, buildResult.BuildVersion);
+        Assert.Equal("3.4.0." + new LibGit2Commit(repo.Head.Tip, repository).GetIdAsVersion().Revision, buildResult.BuildVersion);
         Assert.Equal("3.4.0+" + repo.Head.Tip.Id.Sha.Substring(0, VersionOptions.DefaultGitCommitIdShortFixedLength), buildResult.AssemblyInformationalVersion);
     }
 
@@ -209,9 +211,10 @@ public class BuildIntegrationTests : RepoTestBase, IClassFixture<MSBuildFixture>
     {
         Repository.Init(this.RepoPath);
         var repo = new Repository(this.RepoPath); // do not assign Repo property to avoid commits being generated later
+        var repository = new LibGit2Repository(repo);
         repo.Commit("empty", this.Signer, this.Signer, new CommitOptions { AllowEmptyCommit = true });
         var buildResult = await this.BuildAsync();
-        Assert.Equal("0.0.0." + repo.Head.Tip.GetIdAsVersion().Revision, buildResult.BuildVersion);
+        Assert.Equal("0.0.0." + new LibGit2Commit(repo.Head.Tip, repository).GetIdAsVersion().Revision, buildResult.BuildVersion);
         Assert.Equal("0.0.0+" + repo.Head.Tip.Id.Sha.Substring(0, VersionOptions.DefaultGitCommitIdShortFixedLength), buildResult.AssemblyInformationalVersion);
     }
 
@@ -291,7 +294,7 @@ public class BuildIntegrationTests : RepoTestBase, IClassFixture<MSBuildFixture>
         var buildResult = await this.BuildAsync();
         this.AssertStandardProperties(VersionOptions.FromVersion(new Version(majorMinorVersion)), buildResult);
 
-        Version version = this.Repo.Head.Tip.GetIdAsVersion();
+        Version version = this.GetHead().GetIdAsVersion();
         Assert.Equal($"{version.Major}.{version.Minor}.{buildResult.GitVersionHeight}", buildResult.NuGetPackageVersion);
     }
 
@@ -983,10 +986,10 @@ public class BuildIntegrationTests : RepoTestBase, IClassFixture<MSBuildFixture>
 
     private void AssertStandardProperties(VersionOptions versionOptions, BuildResults buildResult, string relativeProjectDirectory = null)
     {
-        int versionHeight = this.Repo.GetVersionHeight(relativeProjectDirectory);
-        Version idAsVersion = this.Repo.GetIdAsVersion(relativeProjectDirectory);
+        int versionHeight = this.GitRepository.GetVersionHeight(relativeProjectDirectory);
+        Version idAsVersion = this.GitRepository.GetIdAsVersion(relativeProjectDirectory);
         string commitIdShort = this.CommitIdShort;
-        Version version = this.Repo.GetIdAsVersion(relativeProjectDirectory);
+        Version version = this.GitRepository.GetIdAsVersion(relativeProjectDirectory);
         Version assemblyVersion = GetExpectedAssemblyVersion(versionOptions, version);
         var additionalBuildMetadata = from item in buildResult.BuildResult.ProjectStateAfterBuild.GetItems("BuildMetadata")
                                       select item.EvaluatedInclude;

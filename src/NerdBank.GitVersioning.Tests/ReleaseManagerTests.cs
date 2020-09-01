@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using LibGit2Sharp;
 using Nerdbank.GitVersioning;
+using NerdBank.GitVersioning.Git;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -16,6 +17,8 @@ using Version = System.Version;
 
 public class ReleaseManagerTests : RepoTestBase
 {
+    private IGitRepository repository;
+
     public ReleaseManagerTests(ITestOutputHelper logger) : base(logger)
     {
     }
@@ -170,7 +173,7 @@ public class ReleaseManagerTests : RepoTestBase
 
         // check version on release branch
         {
-            var actualVersionOptions = VersionFile.GetVersion(this.Repo.Branches[branchName].Tip);
+            var actualVersionOptions = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Branches[branchName].Tip, this.repository));
             Assert.Equal(expectedVersionOptions, actualVersionOptions);
         }
     }
@@ -342,13 +345,13 @@ public class ReleaseManagerTests : RepoTestBase
 
         // check version on release branch
         {
-            var releaseBranchVersion = VersionFile.GetVersion(releaseBranch.Tip);
+            var releaseBranchVersion = VersionFile.GetVersion(new LibGit2Commit(releaseBranch.Tip, this.repository));
             Assert.Equal(expectedVersionOptionsReleaseBranch, releaseBranchVersion);
         }
 
         // check version on master branch
         {
-            var currentBranchVersion = VersionFile.GetVersion(this.Repo.Head.Tip);
+            var currentBranchVersion = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Head.Tip, this.repository));
             Assert.Equal(expectedVersionOptionsCurrentBrach, currentBranchVersion);
         }
     }
@@ -466,7 +469,7 @@ public class ReleaseManagerTests : RepoTestBase
         // check "CurrentBranch" output
         {
             var expectedCommitId = this.Repo.Branches[currentBranchName].Tip.Sha;
-            var expectedVersion = VersionFile.GetVersion(this.Repo.Branches[currentBranchName].Tip).Version.ToString();
+            var expectedVersion = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Branches[currentBranchName].Tip, this.repository)).Version.ToString();
 
             var currentBranchOutput = jsonOutput.Property("CurrentBranch")?.Value as JObject;
             Assert.NotNull(currentBranchOutput);
@@ -480,7 +483,7 @@ public class ReleaseManagerTests : RepoTestBase
         // Check "NewBranch" output
         {
             var expectedCommitId = this.Repo.Branches[releaseBranchName].Tip.Sha;
-            var expectedVersion = VersionFile.GetVersion(this.Repo.Branches[releaseBranchName].Tip).Version.ToString();
+            var expectedVersion = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Branches[releaseBranchName].Tip, this.repository)).Version.ToString();
 
             var newBranchOutput = jsonOutput.Property("NewBranch")?.Value as JObject;
             Assert.NotNull(newBranchOutput);
@@ -534,7 +537,7 @@ public class ReleaseManagerTests : RepoTestBase
         // check "CurrentBranch"  output
         {
             var expectedCommitId = this.Repo.Branches[branchName].Tip.Sha;
-            var expectedVersion = VersionFile.GetVersion(this.Repo.Branches[branchName].Tip).Version.ToString();
+            var expectedVersion = VersionFile.GetVersion(new LibGit2Commit(this.Repo.Branches[branchName].Tip, this.repository)).Version.ToString();
 
             var currentBranchOutput = jsonOutput.Property("CurrentBranch")?.Value as JObject;
             Assert.NotNull(currentBranchOutput);
@@ -556,6 +559,8 @@ public class ReleaseManagerTests : RepoTestBase
     {
         base.InitializeSourceControl();
         this.Ignore_git2_UntrackedFile();
+
+        this.repository = new LibGit2Repository(this.Repo);
     }
 
     private void AssertError(Action testCode, ReleasePreparationError expectedError)

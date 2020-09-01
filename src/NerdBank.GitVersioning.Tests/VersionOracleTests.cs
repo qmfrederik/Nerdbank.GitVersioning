@@ -1,9 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using LibGit2Sharp;
 using Nerdbank.GitVersioning;
+using NerdBank.GitVersioning.Git;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -101,18 +101,18 @@ public class VersionOracleTests : RepoTestBase
 
         var oracle = VersionOracle.Create(this.RepoPath);
         Assert.Equal(11, oracle.VersionHeight);
-        Assert.Equal(11, this.Repo.Head.GetVersionHeight());
+        Assert.Equal(11, this.GetHead().GetVersionHeight());
 
         options.Version = SemanticVersion.Parse(next);
 
         this.WriteVersionFile(options);
         oracle = VersionOracle.Create(this.RepoPath);
         Assert.Equal(1, oracle.VersionHeight);
-        Assert.Equal(1, this.Repo.Head.GetVersionHeight());
+        Assert.Equal(1, this.GetHead().GetVersionHeight());
 
         foreach (var commit in this.Repo.Head.Commits)
         {
-            var versionFromId = commit.GetIdAsVersion();
+            var versionFromId = new LibGit2Commit(commit, this.GitRepository).GetIdAsVersion();
             Assert.Contains(commit, this.Repo.GetCommitsFromVersion(versionFromId));
         }
     }

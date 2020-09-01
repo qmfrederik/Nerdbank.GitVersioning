@@ -4,6 +4,7 @@
     using System.Collections.Generic;
     using System.IO;
     using LibGit2Sharp;
+    using NerdBank.GitVersioning.Git;
     using Newtonsoft.Json;
     using Validation;
     using Version = System.Version;
@@ -327,7 +328,7 @@
             Requires.NotNull(repository, nameof(repository));
 
             var signature = this.GetSignature(repository);
-            var versionOptions = VersionFile.GetVersion(repository, projectDirectory);
+            var versionOptions = VersionFile.GetVersion(new LibGit2Repository(repository), projectDirectory);
 
             if (IsVersionDecrement(oldVersion, newVersion))
             {
