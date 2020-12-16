@@ -50,7 +50,9 @@ namespace Nerdbank.GitVersioning.ManagedGit
         /// </param>
         public ZLibStream(Stream stream, long length = -1)
         {
-            this.stream = new BufferedStream(new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: false));
+            this.stream = new BufferedStream(
+                stream: new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: false),
+                bufferSize: 128);
             this.length = length;
 
             Span<byte> zlibHeader = stackalloc byte[2];
