@@ -17,8 +17,13 @@ namespace ManagedGit
             using (var sha = SHA1.Create())
             {
                 Assert.Equal(137, stream.Length);
-                var deflateStream = Assert.IsType<DeflateStream>(stream.BaseStream);
+                var bufferedStream = Assert.IsType<BufferedStream>(stream.BaseStream);
+
+#if !NET461
+                var deflateStream = Assert.IsType<DeflateStream>(bufferedStream.UnderlyingStream);
                 Assert.Same(rawStream, deflateStream.BaseStream);
+#endif
+
                 Assert.Equal("commit", stream.ObjectType);
                 Assert.Equal(0, stream.Position);
 

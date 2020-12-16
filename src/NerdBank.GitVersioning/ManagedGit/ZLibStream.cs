@@ -37,7 +37,7 @@ namespace Nerdbank.GitVersioning.ManagedGit
     {
         private long length;
         private long position;
-        private DeflateStream stream;
+        private Stream stream;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ZLibStream"/>  class.
@@ -50,7 +50,7 @@ namespace Nerdbank.GitVersioning.ManagedGit
         /// </param>
         public ZLibStream(Stream stream, long length = -1)
         {
-            this.stream = new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: false);
+            this.stream = new BufferedStream(new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: false));
             this.length = length;
 
             Span<byte> zlibHeader = stackalloc byte[2];

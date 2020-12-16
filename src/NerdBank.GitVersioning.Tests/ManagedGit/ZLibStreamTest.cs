@@ -17,8 +17,13 @@ namespace ManagedGit
             using (ZLibStream stream = new ZLibStream(rawStream, -1))
             using (var sha = SHA1.Create())
             {
-                var deflateStream = Assert.IsType<DeflateStream>(stream.BaseStream);
+                var bufferedStream = Assert.IsType<BufferedStream>(stream.BaseStream);
+
+#if !NET461
+                var deflateStream = Assert.IsType<DeflateStream>(bufferedStream.UnderlyingStream);
                 Assert.Same(rawStream, deflateStream.BaseStream);
+#endif
+
                 Assert.Equal(0, stream.Position);
 
                 var hash = sha.ComputeHash(stream);
